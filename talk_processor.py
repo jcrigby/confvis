@@ -27,29 +27,45 @@ class TalkProcessor:
         """Load documents from a directory."""
         documents = []
         
+        # Check if directory exists
+        if not os.path.exists(directory):
+            print(f"Directory '{directory}' not found.")
+            return pd.DataFrame(documents)
+        
+        # Check if directory is empty
+        if not os.listdir(directory):
+            print(f"Directory '{directory}' is empty.")
+            return pd.DataFrame(documents)
+        
         for filename in os.listdir(directory):
             if filename.endswith('.txt'):
                 filepath = os.path.join(directory, filename)
-                with open(filepath, 'r', encoding='utf-8') as file:
-                    text = file.read()
-                
-                # Extract metadata from filename (assuming format: YYYY_MM_Speaker_Title.txt)
-                parts = filename[:-4].split('_')
-                if len(parts) >= 4:
-                    year, month = parts[0], parts[1]
-                    speaker = parts[2]
-                    title = '_'.join(parts[3:])
-                else:
-                    year, month, speaker, title = 'Unknown', 'Unknown', 'Unknown', filename[:-4]
-                
-                documents.append({
-                    'id': filename[:-4],
-                    'text': text,
-                    'year': year,
-                    'month': month,
-                    'speaker': speaker,
-                    'title': title
-                })
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as file:
+                        text = file.read()
+                    
+                    # Extract metadata from filename (assuming format: YYYY_MM_Speaker_Title.txt)
+                    parts = filename[:-4].split('_')
+                    if len(parts) >= 4:
+                        year, month = parts[0], parts[1]
+                        speaker = parts[2]
+                        title = '_'.join(parts[3:])
+                    else:
+                        year, month, speaker, title = 'Unknown', 'Unknown', 'Unknown', filename[:-4]
+                    
+                    documents.append({
+                        'id': filename[:-4],
+                        'text': text,
+                        'year': year,
+                        'month': month,
+                        'speaker': speaker,
+                        'title': title
+                    })
+                except Exception as e:
+                    print(f"Error reading file {filepath}: {e}")
+        
+        if not documents:
+            print("No valid documents found in the directory.")
         
         return pd.DataFrame(documents)
     

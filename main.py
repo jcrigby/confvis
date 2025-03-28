@@ -18,6 +18,12 @@ def main():
     # Analyze talks
     documents, agnostic_clusterer, aware_clusterer = analyze_talks(args.dir, args.clusters)
     
+    # Check if analysis was successful
+    if documents is None:
+        print("Analysis could not be completed. Please run the scraper to download conference talks first.")
+        print("Example: python lds_talk_scraper.py --output ./talks --start 2010 --end 2023")
+        return
+    
     # Create interactive visualization if requested
     if args.interactive:
         create_interactive_visualization(

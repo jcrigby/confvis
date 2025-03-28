@@ -11,6 +11,11 @@ def analyze_talks(directory, n_clusters=5):
     documents = processor.load_documents(directory)
     print(f"Loaded {len(documents)} documents")
     
+    # Check if any documents were found
+    if len(documents) == 0:
+        print("No documents found in the directory. Please run the scraper first or check the directory path.")
+        return None, None, None
+    
     # Process documents with both approaches
     print("Processing documents...")
     documents = processor.process_documents(documents, domain_aware=False)
