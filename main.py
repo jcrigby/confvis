@@ -1,0 +1,36 @@
+import os
+import argparse
+from analysis import analyze_talks
+from visualization import create_interactive_visualization
+
+def main():
+    parser = argparse.ArgumentParser(description='Cluster LDS Conference Talks')
+    parser.add_argument('--dir', type=str, required=True, help='Directory containing talk text files')
+    parser.add_argument('--clusters', type=int, default=8, help='Number of clusters to create')
+    parser.add_argument('--interactive', action='store_true', help='Create interactive visualization')
+    args = parser.parse_args()
+    
+    # Check if directory exists
+    if not os.path.isdir(args.dir):
+        print(f"Error: Directory '{args.dir}' does not exist")
+        return
+    
+    # Analyze talks
+    documents, agnostic_clusterer, aware_clusterer = analyze_talks(args.dir, args.clusters)
+    
+    # Create interactive visualization if requested
+    if args.interactive:
+        create_interactive_visualization(
+            documents,
+            agnostic_clusterer.vectorizer.transform(documents['processed_domain_agnostic']),
+            documents['agnostic_cluster'].values,
+            aware_clusterer.vectorizer.transform(documents['processed_domain_aware']),
+            documents['aware_cluster'].values,
+            agnostic_clusterer.cluster_labels,
+            aware_clusterer.cluster_labels
+        )
+    
+    print("Analysis complete!")
+
+if __name__ == "__main__":
+    main()
