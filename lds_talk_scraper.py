@@ -37,18 +37,74 @@ class LDSConferenceScraper:
         soup = BeautifulSoup(response.text, 'html.parser')
         talk_links = []
         
-        # Find talk links - this selector may need adjustment based on the website structure
-        for a in soup.select(".doc-map a[href*='/study/general-conference/']"):
+        # First, get all session URLs from the conference page
+        session_links = []
+        
+        # Looking for links to sessions (Saturday Morning, etc.)
+        for a in soup.select("a"):
             href = a.get('href')
-            if href and '/study/general-conference/' in href and not href.endswith('?lang=eng'):
+            if href and 'session' in href.lower() and '/study/general-conference/' in href:
                 # Convert relative URLs to absolute
                 if href.startswith('/'):
-                    href = f"https://www.churchofjesuschrist.org{href}?lang=eng"
+                    full_href = f"https://www.churchofjesuschrist.org{href}"
                 elif not href.startswith('http'):
-                    href = f"https://www.churchofjesuschrist.org/study/general-conference/{href}?lang=eng"
+                    full_href = f"https://www.churchofjesuschrist.org/study/general-conference/{href}"
+                else:
+                    full_href = href
                 
-                talk_links.append(href)
+                # Add lang=eng if not present
+                if "?lang=eng" not in full_href:
+                    full_href = f"{full_href}?lang=eng"
+                    
+                session_links.append(full_href)
         
+        print(f"Found {len(session_links)} session links")
+        
+        # For each session, get the talk links
+        for session_url in session_links:
+            print(f"Fetching session: {session_url}")
+            session_response = requests.get(session_url)
+            if session_response.status_code != 200:
+                print(f"Failed to fetch session page: {session_url}")
+                continue
+                
+            session_soup = BeautifulSoup(session_response.text, 'html.parser')
+            
+            # Look for talk links within the session
+            for talk_link in session_soup.select("a[href*='/study/general-conference/']"):
+                href = talk_link.get('href')
+                if not href:
+                    continue
+                    
+                # Skip session links and already processed links
+                if 'session' in href.lower() or href in talk_links:
+                    continue
+                    
+                # Process only talk links
+                if '/study/general-conference/' in href:
+                    # Convert relative URLs to absolute
+                    if href.startswith('/'):
+                        full_href = f"https://www.churchofjesuschrist.org{href}"
+                    elif not href.startswith('http'):
+                        full_href = f"https://www.churchofjesuschrist.org/study/general-conference/{href}"
+                    else:
+                        full_href = href
+                    
+                    # Add lang=eng if not present
+                    if "?lang=eng" not in full_href:
+                        full_href = f"{full_href}?lang=eng"
+                    
+                    # Add only if it's a talk link (not another session or the conference index)
+                    parts = href.split('/')
+                    if len(parts) > 4 and not any(x in href for x in ['session', 'index']):
+                        talk_links.append(full_href)
+            
+            # Be nice to the server
+            time.sleep(1)
+        
+        # Remove duplicates
+        talk_links = list(set(talk_links))
+        print(f"Found {len(talk_links)} talk links")
         return talk_links
     
     def extract_talk_content(self, talk_url):
@@ -58,25 +114,59 @@ class LDSConferenceScraper:
         if response.status_code != 200:
             print(f"Failed to fetch talk: {talk_url}")
             return None
-            
+        
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # Extract title
         title_elem = soup.select_one("h1.title")
+        if not title_elem:
+            title_elem = soup.select_one("h1")
         title = title_elem.text.strip() if title_elem else "Unknown Title"
+        
+        # If the title is too generic (like conference name), skip this talk
+        if 'general conference' in title.lower() and len(title.split()) < 5:
+            print(f"Skipping generic conference page: {title}")
+            return None
         
         # Extract speaker
         speaker_elem = soup.select_one(".author-name")
+        if not speaker_elem:
+            speaker_elem = soup.select_one(".articles-author")
         speaker = speaker_elem.text.strip() if speaker_elem else "Unknown Speaker"
         
         # Extract speaker's calling/role
         calling_elem = soup.select_one(".article-author p.role")
+        if not calling_elem:
+            calling_elem = soup.select_one(".articles-subtitle")
         calling = calling_elem.text.strip() if calling_elem else ""
         
         # Extract talk content (paragraphs)
         content = []
-        for p in soup.select(".body-block p"):
-            content.append(p.text.strip())
+        
+        # Try different selectors for paragraphs
+        paragraph_selectors = [
+            ".body-block p", 
+            ".body p",
+            "article p",
+            "#content p"
+        ]
+        
+        for selector in paragraph_selectors:
+            paragraphs = soup.select(selector)
+            if paragraphs:
+                for p in paragraphs:
+                    text = p.text.strip()
+                    if text and len(text) > 10:  # Skip very short paragraphs that might be metadata
+                        content.append(text)
+                break  # Stop if we found paragraphs with this selector
+        
+        # If no content found, try a more generic approach
+        if not content:
+            print(f"No content found with standard selectors, trying generic approach for: {talk_url}")
+            for p in soup.find_all('p'):
+                text = p.text.strip()
+                if text and len(text) > 10:
+                    content.append(text)
         
         # Extract date information from URL
         date_match = re.search(r'/general-conference/(\d{4})/(\d{2})/', talk_url)
@@ -86,6 +176,11 @@ class LDSConferenceScraper:
             date = f"{month_name} {year}"
         else:
             date = "Unknown Date"
+        
+        # Skip if empty content
+        if not content:
+            print(f"No content found for talk: {talk_url}")
+            return None
         
         # Create talk object
         talk = {
