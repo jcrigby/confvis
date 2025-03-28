@@ -24,7 +24,7 @@ class TalkProcessor:
         }
     
     def load_documents(self, directory):
-        """Load documents from a directory."""
+        """Load documents from a directory and its subdirectories recursively."""
         documents = []
         
         # Check if directory exists
@@ -37,35 +37,39 @@ class TalkProcessor:
             print(f"Directory '{directory}' is empty.")
             return pd.DataFrame(documents)
         
-        for filename in os.listdir(directory):
-            if filename.endswith('.txt'):
-                filepath = os.path.join(directory, filename)
-                try:
-                    with open(filepath, 'r', encoding='utf-8') as file:
-                        text = file.read()
-                    
-                    # Extract metadata from filename (assuming format: YYYY_MM_Speaker_Title.txt)
-                    parts = filename[:-4].split('_')
-                    if len(parts) >= 4:
-                        year, month = parts[0], parts[1]
-                        speaker = parts[2]
-                        title = '_'.join(parts[3:])
-                    else:
-                        year, month, speaker, title = 'Unknown', 'Unknown', 'Unknown', filename[:-4]
-                    
-                    documents.append({
-                        'id': filename[:-4],
-                        'text': text,
-                        'year': year,
-                        'month': month,
-                        'speaker': speaker,
-                        'title': title
-                    })
-                except Exception as e:
-                    print(f"Error reading file {filepath}: {e}")
+        # Walk through all subdirectories recursively
+        for root, _, files in os.walk(directory):
+            for filename in files:
+                if filename.endswith('.txt'):
+                    filepath = os.path.join(root, filename)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as file:
+                            text = file.read()
+                        
+                        # Extract metadata from filename (assuming format: YYYY_MM_Speaker_Title.txt)
+                        parts = filename[:-4].split('_')
+                        if len(parts) >= 4:
+                            year, month = parts[0], parts[1]
+                            speaker = parts[2]
+                            title = '_'.join(parts[3:])
+                        else:
+                            year, month, speaker, title = 'Unknown', 'Unknown', 'Unknown', filename[:-4]
+                        
+                        documents.append({
+                            'id': filename[:-4],
+                            'text': text,
+                            'year': year,
+                            'month': month,
+                            'speaker': speaker,
+                            'title': title
+                        })
+                    except Exception as e:
+                        print(f"Error reading file {filepath}: {e}")
         
         if not documents:
-            print("No valid documents found in the directory.")
+            print("No valid documents found in the directory or its subdirectories.")
+        else:
+            print(f"Found {len(documents)} documents across all subdirectories.")
         
         return pd.DataFrame(documents)
     
